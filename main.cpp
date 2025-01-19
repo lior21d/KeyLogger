@@ -8,7 +8,7 @@
 
     - check for lower and upper case chars, also special like SHIFT2 -> @
     - make holding accurate
-
+    / make file hidden
 */
 
 

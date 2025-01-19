@@ -24,4 +24,4 @@ public:
     void run(); // Start the keylogger
 };
 
-#endif // KEYLOGGER_HPP
+#endif // KEYLOGGER_HPP 
