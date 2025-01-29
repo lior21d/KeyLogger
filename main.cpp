@@ -1,7 +1,8 @@
 #include "KeyLogger.hpp"
 #include <iostream>
 
-
+// cmake -B build
+// cmake --build build
 int main()
 {
     // Defining log file path
